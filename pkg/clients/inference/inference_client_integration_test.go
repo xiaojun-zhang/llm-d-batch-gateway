@@ -142,7 +142,7 @@ func testHTTPClientBasicInference(t *testing.T) {
 	t.Run("should handle concurrent requests correctly", func(t *testing.T) {
 		// Verifies connection pooling and thread safety
 		const numRequests = 10
-		results := make(chan error, numRequests)
+		results := make(chan *ClientError, numRequests)
 
 		for i := 0; i < numRequests; i++ {
 			go func(id int) {
