@@ -337,6 +337,7 @@ dev-clean:
 ## dev-rm-cluster: Delete the kind cluster
 dev-rm-cluster:
 	@echo "Deleting kind cluster 'batch-gateway-dev'..."
+	@bash -c 'source scripts/dev-common.sh; stop_processor_port_forward'
 	@kind delete cluster --name batch-gateway-dev || echo "Cluster not found or already deleted"
 	@echo "✅ Kind cluster deleted"
 

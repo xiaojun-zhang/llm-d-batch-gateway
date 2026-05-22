@@ -24,6 +24,7 @@ LOCAL_PORT="${LOCAL_PORT:-8000}"
 LOCAL_OBS_PORT="${LOCAL_OBS_PORT:-8081}"
 LOCAL_PROCESSOR_PORT="${LOCAL_PROCESSOR_PORT:-9090}"
 JAEGER_PORT="${JAEGER_PORT:-16686}"
+PORT_FORWARD_STATE_DIR="${PORT_FORWARD_STATE_DIR:-/tmp}"
 
 # Service names
 REDIS_RELEASE="${REDIS_RELEASE:-redis}"
@@ -46,3 +47,18 @@ MINIO_NAME="${MINIO_NAME:-minio}"
 TLS_SECRET_NAME="${TLS_SECRET_NAME:-${HELM_RELEASE}-tls}"
 APP_SECRET_NAME="${APP_SECRET_NAME:-${HELM_RELEASE}-secrets}"
 FILES_PVC_NAME="${FILES_PVC_NAME:-${HELM_RELEASE}-files}"
+
+# ── Shared Functions ──────────────────────────────────────────────────────────
+
+stop_processor_port_forward() {
+    local pid_file="${PORT_FORWARD_STATE_DIR}/${HELM_RELEASE}-processor-port-forward.pid"
+    if [ -f "${pid_file}" ]; then
+        local pf_pid
+        pf_pid="$(cat "${pid_file}")"
+        if kill -0 "${pf_pid}" 2>/dev/null; then
+            log "Stopping processor port-forward (pid ${pf_pid})..."
+            kill "${pf_pid}" 2>/dev/null || true
+        fi
+        rm -f "${pid_file}"
+    fi
+}

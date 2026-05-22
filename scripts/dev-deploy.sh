@@ -33,7 +33,6 @@ GRAFANA_IMAGE="${GRAFANA_IMAGE:-${IMAGE_REGISTRY}/grafana/grafana:latest}"
 LOG_VERBOSITY="${LOG_VERBOSITY:-5}"
 APISERVER_NODE_PORT="${APISERVER_NODE_PORT:-30080}"
 APISERVER_OBS_NODE_PORT="${APISERVER_OBS_NODE_PORT:-30081}"
-PROCESSOR_NODE_PORT="${PROCESSOR_NODE_PORT:-30090}"
 JAEGER_NODE_PORT="${JAEGER_NODE_PORT:-30086}"
 PROMETHEUS_NODE_PORT="${PROMETHEUS_NODE_PORT:-30091}"
 GRAFANA_NODE_PORT="${GRAFANA_NODE_PORT:-30030}"
@@ -121,9 +120,6 @@ nodes:
     protocol: TCP
   - containerPort: ${APISERVER_OBS_NODE_PORT}
     hostPort: ${LOCAL_OBS_PORT}
-    protocol: TCP
-  - containerPort: ${PROCESSOR_NODE_PORT}
-    hostPort: ${LOCAL_PROCESSOR_PORT}
     protocol: TCP
   - containerPort: ${JAEGER_NODE_PORT}
     hostPort: ${JAEGER_PORT}
@@ -1189,8 +1185,45 @@ wait_for_http_ready() {
     die "Timed out waiting for API server to become ready"
 }
 
+start_processor_port_forward() {
+    local state_dir="${PORT_FORWARD_STATE_DIR}"
+    local pid_file="${state_dir}/${HELM_RELEASE}-processor-port-forward.pid"
+    local log_file="${state_dir}/${HELM_RELEASE}-processor-port-forward.log"
+
+    mkdir -p "${state_dir}"
+
+    stop_processor_port_forward
+
+    step "Starting processor port-forward on localhost:${LOCAL_PROCESSOR_PORT}..."
+    kubectl port-forward -n "${NAMESPACE}" \
+        "deployment/${HELM_RELEASE}-processor" \
+        "${LOCAL_PROCESSOR_PORT}:9090" >"${log_file}" 2>&1 &
+    local pf_pid=$!
+    echo "${pf_pid}" > "${pid_file}"
+
+    for i in $(seq 1 30); do
+        if curl -sf "http://localhost:${LOCAL_PROCESSOR_PORT}/ready" >/dev/null 2>&1; then
+            log "Processor port-forward ready at http://localhost:${LOCAL_PROCESSOR_PORT} (pid ${pf_pid})"
+            return 0
+        fi
+        if ! kill -0 "${pf_pid}" 2>/dev/null; then
+            warn "Processor port-forward exited unexpectedly:"
+            [ -f "${log_file}" ] && cat "${log_file}" || true
+            die "Failed to start processor port-forward"
+        fi
+        sleep 1
+    done
+
+    die "Timed out waiting for processor port-forward on localhost:${LOCAL_PROCESSOR_PORT}"
+}
+
 create_nodeport_services() {
     step "Creating NodePort services for local access..."
+
+    if [ "${DEBUG:-}" = "1" ]; then
+        log "Existing NodePort services (diagnostic):"
+        kubectl get svc -A -o jsonpath='{range .items[?(@.spec.type=="NodePort")]}{.metadata.namespace}{"/"}{.metadata.name}{"\t"}{range .spec.ports[*]}{.nodePort}{" "}{end}{"\n"}{end}' 2>/dev/null || true
+    fi
 
     kubectl apply -n "${NAMESPACE}" -f - <<EOF
 apiVersion: v1
@@ -1214,23 +1247,6 @@ spec:
     port: 8081
     targetPort: observability
     nodePort: ${APISERVER_OBS_NODE_PORT}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ${HELM_RELEASE}-processor-nodeport
-spec:
-  type: NodePort
-  selector:
-    app.kubernetes.io/name: batch-gateway-processor
-    app.kubernetes.io/instance: ${HELM_RELEASE}
-    app.kubernetes.io/component: processor
-  ports:
-  - name: metrics
-    protocol: TCP
-    port: 9090
-    targetPort: metrics
-    nodePort: ${PROCESSOR_NODE_PORT}
 ---
 apiVersion: v1
 kind: Service
@@ -1424,6 +1440,7 @@ main() {
     verify_deployment
     if [ "${USE_KIND}" = true ]; then
         create_nodeport_services
+        start_processor_port_forward
     fi
     print_usage
 

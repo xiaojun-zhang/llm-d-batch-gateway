@@ -20,12 +20,17 @@ cleanup_kubernetes_resources() {
     kubectl delete inferenceobjective -l app.kubernetes.io/managed-by=batch-gateway-dev -n "${NAMESPACE}" --ignore-not-found=true \
         || warn "Failed to delete InferenceObjective CRDs"
 
+    # Stop processor port-forward before helm uninstall to avoid noisy
+    # "connection refused" logs when the deployment disappears underneath it.
+    stop_processor_port_forward
+
     log "Uninstalling helm releases..."
     helm uninstall "${HELM_RELEASE}" -n "${NAMESPACE}" 2>/dev/null || warn "Failed to uninstall ${HELM_RELEASE} (may not exist)"
     helm uninstall "${REDIS_RELEASE}" -n "${NAMESPACE}" 2>/dev/null || warn "Failed to uninstall ${REDIS_RELEASE} (may not exist)"
     helm uninstall "${POSTGRESQL_RELEASE}" -n "${NAMESPACE}" 2>/dev/null || warn "Failed to uninstall ${POSTGRESQL_RELEASE} (may not exist)"
 
-    # Delete NodePort services (created outside of Helm)
+    # Delete NodePort services (created outside of Helm).
+    # processor-nodeport is no longer created but may exist from prior deployments.
     log "Deleting NodePort services..."
     kubectl delete svc "${HELM_RELEASE}-apiserver-nodeport" -n "${NAMESPACE}" --ignore-not-found=true
     kubectl delete svc "${HELM_RELEASE}-processor-nodeport" -n "${NAMESPACE}" --ignore-not-found=true
