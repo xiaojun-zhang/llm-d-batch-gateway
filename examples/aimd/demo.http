@@ -1,0 +1,186 @@
+# AIMD Adaptive Concurrency Demo
+# REST Client format for VS Code REST Client plugin
+#
+# This demo shows AIMD (Additive Increase Multiplicative Decrease) adaptive
+# concurrency control in the batch processor. The sim-model-aimd simulator
+# starts with 100% failure injection, causing AIMD to drop concurrency to
+# its floor. After clearing failures, AIMD recovers back to full capacity.
+#
+# Usage:
+# 1. Deploy the dev cluster: make dev-deploy
+# 2. Open Grafana: http://localhost:3000 → Processor dashboard → AIMD panels
+# 3. Follow sequences below in order
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
+@baseUrl = https://localhost:8000/v1
+@tenantHeader = X-MaaS-Username
+@tenantId = demo-user
+@apiKey = unused
+@inputFile = batch_input_aimd.jsonl
+@namespace = default
+
+# ============================================================
+# SEQUENCE 1: Observe AIMD Drop Under Failures
+# ============================================================
+#
+# The sim-model-aimd simulator is deployed with 100% rate_limit failure
+# injection. All inference requests return 429, causing the AIMD controller
+# to multiplicatively decrease the per-endpoint concurrency limit.
+#
+# Expected: concurrency drops from 10 → 5 (floor) within seconds.
+# Watch the "AIMD Concurrency Limit per Endpoint" Grafana panel.
+
+### Upload Batch Input File
+# @name uploadFailure
+POST {{baseUrl}}/files
+{{tenantHeader}}: {{tenantId}}
+Authorization: Bearer {{apiKey}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="purpose"
+
+batch
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="{{inputFile}}"
+Content-Type: application/jsonl
+
+< ./{{inputFile}}
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+# Set @fileId1 with the file ID from the response
+@fileId1 =
+
+### Create Batch (100% failures — AIMD will drop)
+# @name createBatchFailure
+POST {{baseUrl}}/batches
+{{tenantHeader}}: {{tenantId}}
+Authorization: Bearer {{apiKey}}
+Content-Type: application/json
+
+{
+  "input_file_id": "{{fileId1}}",
+  "endpoint": "/v1/chat/completions",
+  "completion_window": "24h"
+}
+
+# Set @batchId1 with the batch ID from the response
+@batchId1 =
+
+### Poll Batch Status
+# Poll this while watching Grafana. The batch will eventually fail
+# (all requests return 429). The important thing is the AIMD panel.
+GET {{baseUrl}}/batches/{{batchId1}}
+{{tenantHeader}}: {{tenantId}}
+Authorization: Bearer {{apiKey}}
+
+# ============================================================
+# SEQUENCE 2: Clear Failures and Observe AIMD Recovery
+# ============================================================
+#
+# Patch the simulator to 0% failure, then submit a new batch.
+# AIMD will additively increase concurrency back toward 10.
+#
+# Run these kubectl commands in your terminal:
+#
+#   kubectl patch deployment vllm-sim-aimd -n default --type=json \
+#     -p='[{"op":"replace","path":"/spec/template/spec/containers/0/args","value":["--model","sim-model-aimd","--time-to-first-token","10ms","--inter-token-latency","10ms","--failure-injection-rate=0","--failure-types=rate_limit"]}]'
+#
+#   kubectl rollout status deployment/vllm-sim-aimd -n default --timeout=60s
+#
+# Wait for the rollout to complete before proceeding.
+
+### Upload Batch Input File (recovery batch)
+# @name uploadRecovery
+POST {{baseUrl}}/files
+{{tenantHeader}}: {{tenantId}}
+Authorization: Bearer {{apiKey}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="purpose"
+
+batch
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="{{inputFile}}"
+Content-Type: application/jsonl
+
+< ./{{inputFile}}
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+# Set @fileId2 with the file ID from the response
+@fileId2 =
+
+### Create Batch (0% failures — AIMD will recover)
+# @name createBatchRecovery
+POST {{baseUrl}}/batches
+{{tenantHeader}}: {{tenantId}}
+Authorization: Bearer {{apiKey}}
+Content-Type: application/json
+
+{
+  "input_file_id": "{{fileId2}}",
+  "endpoint": "/v1/chat/completions",
+  "completion_window": "24h"
+}
+
+# Set @batchId2 with the batch ID from the response
+@batchId2 =
+
+### Poll Batch Status (should complete successfully)
+GET {{baseUrl}}/batches/{{batchId2}}
+{{tenantHeader}}: {{tenantId}}
+Authorization: Bearer {{apiKey}}
+
+# Set @outputFileId2 with the output_file_id from the response
+@outputFileId2 =
+
+### Download Output File (when status = completed)
+GET {{baseUrl}}/files/{{outputFileId2}}/content
+{{tenantHeader}}: {{tenantId}}
+Authorization: Bearer {{apiKey}}
+
+# ============================================================
+# SEQUENCE 3: Reset Simulator (restore 100% failures)
+# ============================================================
+#
+# Restore the simulator to its original state for the next demo run:
+#
+#   kubectl patch deployment vllm-sim-aimd -n default --type=json \
+#     -p='[{"op":"replace","path":"/spec/template/spec/containers/0/args","value":["--model","sim-model-aimd","--time-to-first-token","10ms","--inter-token-latency","10ms","--failure-injection-rate=100","--failure-types=rate_limit"]}]'
+#
+#   kubectl rollout status deployment/vllm-sim-aimd -n default --timeout=60s
+
+# ============================================================
+# MONITORING
+# ============================================================
+
+### Grafana — AIMD Panels
+# Open in browser: http://localhost:3000/d/batch-gateway-processor
+#
+# Key panels:
+#   - "AIMD Concurrency Limit per Endpoint" — shows the live limit per endpoint
+#   - "AIMD Signals (decreases / increases)" — shows decrease/increase events by signal
+
+### Query AIMD Concurrency Limit (Prometheus via Grafana)
+GET http://localhost:3000/api/datasources/proxy/1/api/v1/query?query=batch_processor_aimd_concurrency_limit
+Accept: application/json
+
+### Query AIMD Decrease Signals (Prometheus via Grafana)
+GET http://localhost:3000/api/datasources/proxy/1/api/v1/query?query=sum(rate(batch_processor_aimd_decreases_total[5m]))by(endpoint,signal)
+Accept: application/json
+
+### Query AIMD Increase Signals (Prometheus via Grafana)
+GET http://localhost:3000/api/datasources/proxy/1/api/v1/query?query=sum(rate(batch_processor_aimd_increases_total[5m]))by(endpoint)
+Accept: application/json
+
+### Processor Metrics (Direct)
+GET http://localhost:9090/metrics
+Accept: text/plain
+
+### Processor Health
+GET http://localhost:9090/health
+Accept: application/json
