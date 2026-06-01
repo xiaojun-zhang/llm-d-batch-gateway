@@ -20,10 +20,23 @@ The asymmetry — fast decrease, slow increase — is intentional: the system ba
 
 ## Prerequisites
 
-1. **Deploy the dev cluster**:
+1. **Deploy the dev cluster** (requires `llm-d-inference-sim` v0.9.1+ for the `/admin/config` endpoint):
 
    ```bash
    make dev-deploy
+   ```
+
+   To verify the simulator version supports the admin API:
+
+   ```bash
+   kubectl port-forward svc/vllm-sim-aimd 8888:8000 -n default &
+   curl -s http://localhost:8888/admin/config
+   ```
+
+   If the endpoint returns a JSON config, you're good. If it returns 404, set the image explicitly:
+
+   ```bash
+   VLLM_SIM_IMAGE=ghcr.io/llm-d/llm-d-inference-sim:v0.9.1 make dev-deploy
    ```
 
 2. **Install the VS Code REST Client extension** (Ctrl+Shift+X / Cmd+Shift+X), or use `curl` manually.
