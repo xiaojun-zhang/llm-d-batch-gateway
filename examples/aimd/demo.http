@@ -54,8 +54,8 @@ Content-Type: application/jsonl
 < ./{{inputFile}}
 ------WebKitFormBoundary7MA4YWxkTrZu0gW--
 
-# Set @fileId1 with the file ID from the response
-@fileId1 =
+# Set @fileId with the file ID from the response
+@fileId =
 
 ### Create Batch (100% failures — AIMD will drop)
 # @name createBatchFailure
@@ -65,7 +65,7 @@ Authorization: Bearer {{apiKey}}
 Content-Type: application/json
 
 {
-  "input_file_id": "{{fileId1}}",
+  "input_file_id": "{{fileId}}",
   "endpoint": "/v1/chat/completions",
   "completion_window": "24h"
 }
@@ -102,28 +102,8 @@ Content-Type: application/json
   "failure-injection-rate": 0
 }
 
-### Upload Batch Input File (recovery batch)
-# @name uploadRecovery
-POST {{baseUrl}}/files
-{{tenantHeader}}: {{tenantId}}
-Authorization: Bearer {{apiKey}}
-Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
-
-------WebKitFormBoundary7MA4YWxkTrZu0gW
-Content-Disposition: form-data; name="purpose"
-
-batch
-------WebKitFormBoundary7MA4YWxkTrZu0gW
-Content-Disposition: form-data; name="file"; filename="{{inputFile}}"
-Content-Type: application/jsonl
-
-< ./{{inputFile}}
-------WebKitFormBoundary7MA4YWxkTrZu0gW--
-
-# Set @fileId2 with the file ID from the response
-@fileId2 =
-
 ### Create Batch (0% failures — AIMD will recover)
+# Reuses the same input file from Sequence 1.
 # @name createBatchRecovery
 POST {{baseUrl}}/batches
 {{tenantHeader}}: {{tenantId}}
@@ -131,7 +111,7 @@ Authorization: Bearer {{apiKey}}
 Content-Type: application/json
 
 {
-  "input_file_id": "{{fileId2}}",
+  "input_file_id": "{{fileId}}",
   "endpoint": "/v1/chat/completions",
   "completion_window": "24h"
 }
