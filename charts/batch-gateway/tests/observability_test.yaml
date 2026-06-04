@@ -129,6 +129,15 @@ tests:
           value: "30s"
         template: templates/gc-podmonitor.yaml
 
+  - it: should include RHOAI monitoring label on GC PodMonitor by default
+    set:
+      gc.podMonitor.enabled: true
+    asserts:
+      - equal:
+          path: metadata.labels["monitoring.opendatahub.io/scrape"]
+          value: "true"
+        template: templates/gc-podmonitor.yaml
+
   - it: should not render GC PodMonitor when gc is disabled
     set:
       gc.enabled: false

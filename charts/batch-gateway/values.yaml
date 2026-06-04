@@ -508,7 +508,9 @@ gc:
     enabled: false
     interval: "30s"
     # Extra labels to match Prometheus Operator's podMonitorSelector.
-    labels: {}
+    # The RHOAI monitoring label enables metrics scraping by the ODH observability stack.
+    labels:
+      monitoring.opendatahub.io/scrape: "true"
 
   nodeSelector: {}
   tolerations: []
