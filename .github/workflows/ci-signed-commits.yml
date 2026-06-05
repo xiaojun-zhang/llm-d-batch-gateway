@@ -1,9 +1,12 @@
 name: Check Signed Commits
+# Security: pull_request_target is required to read PR metadata on fork PRs.
+# This workflow does NOT checkout PR code — the reusable workflow only inspects
+# commit signatures via the API, so there is no untrusted code execution risk.
 on: pull_request_target
 
 jobs:
   signed-commits:
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-signed-commits.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-signed-commits.yaml@6c2d2e60e7fee83e2a300688f6d4d7a2339c2d74 # main
     permissions:
       contents: read
       pull-requests: write

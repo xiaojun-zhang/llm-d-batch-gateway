@@ -6,4 +6,4 @@ permissions:
 
 jobs:
   remove-lgtm:
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-prow-remove-lgtm.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-prow-remove-lgtm.yaml@6c2d2e60e7fee83e2a300688f6d4d7a2339c2d74 # main
