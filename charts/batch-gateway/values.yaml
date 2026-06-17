@@ -93,6 +93,30 @@ global:
       initialBackoff: "1s"
       maxBackoff: "10s"
 
+# NetworkPolicy configuration
+# When enabled, restricts ingress traffic to each component.
+# Disabled by default for compatibility; enable in production deployments.
+networkPolicy:
+  enabled: false
+  apiserver:
+    # Sources allowed to reach the API server port.
+    # Configure with the pod/namespace selector of your ingress gateway (e.g. Envoy, Istio).
+    ingressFrom: []
+    # Example:
+    # - namespaceSelector:
+    #     matchLabels:
+    #       kubernetes.io/metadata.name: gateway-ns
+    #   podSelector:
+    #     matchLabels:
+    #       app: envoy-gateway
+  monitoring:
+    # Sources allowed to reach observability/metrics ports on all components.
+    ingressFrom: []
+    # Example (allow Prometheus):
+    # - namespaceSelector:
+    #     matchLabels:
+    #       kubernetes.io/metadata.name: monitoring
+
 # API Server configuration
 apiserver:
   enabled: true
@@ -110,7 +134,7 @@ apiserver:
 
   serviceAccount:
     create: true
-    automount: true
+    automount: false
     annotations: {}
     name: ""
 
@@ -248,7 +272,7 @@ processor:
 
   serviceAccount:
     create: true
-    automount: true
+    automount: false
     annotations: {}
     name: ""
 
@@ -462,7 +486,7 @@ gc:
 
   serviceAccount:
     create: true
-    automount: true
+    automount: false
     annotations: {}
     name: ""
 

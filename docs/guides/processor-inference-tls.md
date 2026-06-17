@@ -280,6 +280,16 @@ processor:
 
 Demos in [deploy-k8s.md](deploy-k8s.md) often set `tlsInsecureSkipVerify=true` for in-cluster gateways with self-signed certificates. For production, prefer mounting the real CA (or using a public URL with system roots) and keep `tlsInsecureSkipVerify: false`.
 
+Setting `tlsInsecureSkipVerify: true` in Helm values alone is **not sufficient**. The processor requires the environment variable `BG_ALLOW_INSECURE_TLS=1` to be set on the container as an additional safeguard. Without it, the processor will refuse to start.
+
+The chart does not currently expose an `env` field, so set the variable by patching the processor Deployment after install:
+
+```bash
+kubectl set env deployment/<release>-batch-gateway-processor BG_ALLOW_INSECURE_TLS=1
+```
+
+This double-gate prevents accidental TLS verification bypass in production when only Helm values are modified.
+
 ## Further reading
 
 - Processor gateway configuration and client pooling: [batch_processor_architecture.md](../design/batch_processor_architecture.md#gateway-routing)
